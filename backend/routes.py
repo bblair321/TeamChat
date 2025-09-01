@@ -35,7 +35,7 @@ def login():
     if not user or not check_password_hash(user.password, data["password"]):
         return jsonify({"error": "Invalid credentials"}), 401
 
-    token = create_access_token(identity=user.id)
+    token = create_access_token(identity=str(user.id))
     return jsonify({"token": token})
 
 # Create channel
@@ -67,7 +67,7 @@ def get_channels():
 def post_message():
     User, Channel, Message = get_models()
     db = get_db()
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     data = request.get_json()
     new_msg = Message(content=data["content"], user_id=user_id, channel_id=data["channel_id"])
     db.session.add(new_msg)

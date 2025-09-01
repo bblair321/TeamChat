@@ -53,6 +53,13 @@ def create_app():
         app.db = db
         
         db.create_all()  # create database tables
+        
+        # Create default channel if none exist
+        if Channel.query.count() == 0:
+            default_channel = Channel(name="General")
+            db.session.add(default_channel)
+            db.session.commit()
+            print("Created default 'General' channel")
 
     # Import and register blueprints AFTER models are initialized
     from routes import auth_bp, chat_bp
