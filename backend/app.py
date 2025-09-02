@@ -2,9 +2,12 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
+from flask_socketio import SocketIO
 
 # Create the SQLAlchemy instance
 db = SQLAlchemy()
+# Create the SocketIO instance
+socketio = SocketIO()
 
 def create_app():
     app = Flask(__name__)
@@ -20,6 +23,7 @@ def create_app():
     # Initialize extensions
     db.init_app(app)
     JWTManager(app)
+    socketio.init_app(app, cors_allowed_origins="*")
 
     # Add a simple test route
     @app.route('/')
@@ -65,9 +69,13 @@ def create_app():
     from routes import auth_bp, chat_bp
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(chat_bp, url_prefix="/chat")
+    
+    # Import socket events to register them
+    import socket_events
+    socket_events.init_socket_events(socketio, db)
 
     return app
 
 if __name__ == "__main__":
     app = create_app()
-    app.run(debug=True, port=8000)
+    socketio.run(app, debug=True, port=8000, allow_unsafe_werkzeug=True)
