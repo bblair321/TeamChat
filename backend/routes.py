@@ -7,7 +7,7 @@ chat_bp = Blueprint("chat", __name__)
 
 def get_models():
     """Get models from current app context"""
-    return current_app.User, current_app.Channel, current_app.Message
+    return current_app.User, current_app.Channel, current_app.Message, current_app.Reaction
 
 def get_db():
     """Get db from current app context"""
@@ -15,7 +15,7 @@ def get_db():
 
 @auth_bp.route("/register", methods=["POST"])
 def register():
-    User, Channel, Message = get_models()
+    User, Channel, Message, Reaction = get_models()
     db = get_db()
     data = request.get_json()
     if User.query.filter_by(username=data["username"]).first():
@@ -29,7 +29,7 @@ def register():
 
 @auth_bp.route("/login", methods=["POST"])
 def login():
-    User, Channel, Message = get_models()
+    User, Channel, Message, Reaction = get_models()
     data = request.get_json()
     user = User.query.filter_by(username=data["username"]).first()
     if not user or not check_password_hash(user.password, data["password"]):
@@ -42,7 +42,7 @@ def login():
 @chat_bp.route("/channels", methods=["POST"])
 @jwt_required()
 def create_channel():
-    User, Channel, Message = get_models()
+    User, Channel, Message, Reaction = get_models()
     db = get_db()
     data = request.get_json()
     if Channel.query.filter_by(name=data["name"]).first():
@@ -57,7 +57,7 @@ def create_channel():
 @chat_bp.route("/channels", methods=["GET"])
 @jwt_required()
 def get_channels():
-    User, Channel, Message = get_models()
+    User, Channel, Message, Reaction = get_models()
     channels = Channel.query.all()
     return jsonify([{"id": c.id, "name": c.name} for c in channels])
 
@@ -65,7 +65,7 @@ def get_channels():
 @chat_bp.route("/messages", methods=["POST"])
 @jwt_required()
 def post_message():
-    User, Channel, Message = get_models()
+    User, Channel, Message, Reaction = get_models()
     db = get_db()
     user_id = int(get_jwt_identity())
     data = request.get_json()
@@ -78,9 +78,84 @@ def post_message():
 @chat_bp.route("/messages/<int:channel_id>", methods=["GET"])
 @jwt_required()
 def get_messages(channel_id):
-    User, Channel, Message = get_models()
+    User, Channel, Message, Reaction = get_models()
     messages = Message.query.filter_by(channel_id=channel_id).order_by(Message.timestamp).all()
-    return jsonify([
-        {"id": m.id, "content": m.content, "user": m.user.username, "time": m.timestamp.isoformat()}
-        for m in messages
-    ])
+    
+    # Format messages with reactions
+    formatted_messages = []
+    for m in messages:
+        # Group reactions by emoji
+        reactions = {}
+        for reaction in m.reactions:
+            if reaction.emoji not in reactions:
+                reactions[reaction.emoji] = []
+            reactions[reaction.emoji].append(reaction.user.username)
+        
+        formatted_messages.append({
+            "id": m.id,
+            "content": m.content,
+            "user": m.user.username,
+            "time": m.timestamp.isoformat(),
+            "reactions": reactions
+        })
+    
+    return jsonify(formatted_messages)
+
+# Add reaction to message
+@chat_bp.route("/messages/<int:message_id>/reactions", methods=["POST"])
+@jwt_required()
+def add_reaction(message_id):
+    User, Channel, Message, Reaction = get_models()
+    db = get_db()
+    user_id = int(get_jwt_identity())
+    data = request.get_json()
+    
+    # Check if message exists
+    message = Message.query.get(message_id)
+    if not message:
+        return jsonify({"error": "Message not found"}), 404
+    
+    # Check if user already reacted with this emoji
+    existing_reaction = Reaction.query.filter_by(
+        user_id=user_id, 
+        message_id=message_id, 
+        emoji=data["emoji"]
+    ).first()
+    
+    if existing_reaction:
+        return jsonify({"error": "Already reacted with this emoji"}), 400
+    
+    # Add new reaction
+    new_reaction = Reaction(
+        emoji=data["emoji"],
+        user_id=user_id,
+        message_id=message_id
+    )
+    db.session.add(new_reaction)
+    db.session.commit()
+    
+    return jsonify({"message": "Reaction added"}), 201
+
+# Remove reaction from message
+@chat_bp.route("/messages/<int:message_id>/reactions", methods=["DELETE"])
+@jwt_required()
+def remove_reaction(message_id):
+    User, Channel, Message, Reaction = get_models()
+    db = get_db()
+    user_id = int(get_jwt_identity())
+    data = request.get_json()
+    
+    # Find and remove the reaction
+    reaction = Reaction.query.filter_by(
+        user_id=user_id,
+        message_id=message_id,
+        emoji=data["emoji"]
+    ).first()
+    
+    if not reaction:
+        return jsonify({"error": "Reaction not found"}), 404
+    
+    db.session.delete(reaction)
+    db.session.commit()
+    
+    return jsonify({"message": "Reaction removed"}), 200

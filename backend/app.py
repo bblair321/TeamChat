@@ -24,7 +24,7 @@ def create_app():
     # Initialize extensions
     db.init_app(app)
     JWTManager(app)
-    socketio.init_app(app, cors_allowed_origins="*")
+    socketio.init_app(app, cors_allowed_origins="*", async_mode='threading')
 
     # Add a simple test route
     @app.route('/')
@@ -49,12 +49,13 @@ def create_app():
     with app.app_context():
         # Initialize models with the db instance FIRST
         from models import init_models
-        User, Channel, Message = init_models(db)
+        User, Channel, Message, Reaction = init_models(db)
         
         # Make models and db available globally
         app.User = User
         app.Channel = Channel
         app.Message = Message
+        app.Reaction = Reaction
         app.db = db
         
         db.create_all()  # create database tables
@@ -78,7 +79,15 @@ def create_app():
     return app
 
 if __name__ == "__main__":
-    app = create_app()
-    port = int(os.environ.get("PORT", 8000))
-    debug = os.environ.get("FLASK_ENV") == "development"
-    socketio.run(app, debug=debug, port=port, allow_unsafe_werkzeug=True)
+    try:
+        print("Starting Flask app...")
+        app = create_app()
+        print("App created successfully")
+        port = int(os.environ.get("PORT", 8000))
+        debug = os.environ.get("FLASK_ENV") == "development"
+        print(f"Starting server on port {port}, debug={debug}")
+        socketio.run(app, debug=True, port=port, allow_unsafe_werkzeug=True)
+    except Exception as e:
+        print(f"Error starting app: {e}")
+        import traceback
+        traceback.print_exc()

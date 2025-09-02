@@ -36,10 +36,27 @@ def init_models(db_instance):
         timestamp = db_instance.Column(db_instance.DateTime, default=datetime.utcnow)
         user_id = db_instance.Column(db_instance.Integer, db_instance.ForeignKey("user.id"), nullable=False)
         channel_id = db_instance.Column(db_instance.Integer, db_instance.ForeignKey("channel.id"), nullable=False)
+        reactions = db_instance.relationship("ReactionModel", backref="message", lazy=True, cascade="all, delete-orphan")
+
+    class ReactionModel(db_instance.Model):
+        __tablename__ = 'reaction'
+        
+        id = db_instance.Column(db_instance.Integer, primary_key=True)
+        emoji = db_instance.Column(db_instance.String(10), nullable=False)
+        user_id = db_instance.Column(db_instance.Integer, db_instance.ForeignKey("user.id"), nullable=False)
+        message_id = db_instance.Column(db_instance.Integer, db_instance.ForeignKey("message.id"), nullable=False)
+        timestamp = db_instance.Column(db_instance.DateTime, default=datetime.utcnow)
+        
+        # Add relationship to User
+        user = db_instance.relationship("UserModel", backref="reactions", lazy=True)
+        
+        # Ensure one reaction per user per emoji per message
+        __table_args__ = (db_instance.UniqueConstraint('user_id', 'message_id', 'emoji', name='unique_user_message_emoji'),)
     
     # Set the global variables
     User = UserModel
     Channel = ChannelModel
     Message = MessageModel
+    Reaction = ReactionModel
     
-    return User, Channel, Message
+    return User, Channel, Message, Reaction
