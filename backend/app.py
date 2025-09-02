@@ -1,3 +1,4 @@
+import os
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
@@ -16,9 +17,9 @@ def create_app():
     CORS(app)
     
     # Config
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///chat.db"
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///chat.db")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    app.config["JWT_SECRET_KEY"] = "supersecretkey"  # change for production
+    app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY", "supersecretkey")
 
     # Initialize extensions
     db.init_app(app)
@@ -78,4 +79,6 @@ def create_app():
 
 if __name__ == "__main__":
     app = create_app()
-    socketio.run(app, debug=True, port=8000, allow_unsafe_werkzeug=True)
+    port = int(os.environ.get("PORT", 8000))
+    debug = os.environ.get("FLASK_ENV") == "development"
+    socketio.run(app, debug=debug, port=port, allow_unsafe_werkzeug=True)
