@@ -105,57 +105,88 @@ def get_messages(channel_id):
 @chat_bp.route("/messages/<int:message_id>/reactions", methods=["POST"])
 @jwt_required()
 def add_reaction(message_id):
-    User, Channel, Message, Reaction = get_models()
-    db = get_db()
-    user_id = int(get_jwt_identity())
-    data = request.get_json()
-    
-    # Check if message exists
-    message = Message.query.get(message_id)
-    if not message:
-        return jsonify({"error": "Message not found"}), 404
-    
-    # Check if user already reacted with this emoji
-    existing_reaction = Reaction.query.filter_by(
-        user_id=user_id, 
-        message_id=message_id, 
-        emoji=data["emoji"]
-    ).first()
-    
-    if existing_reaction:
-        return jsonify({"error": "Already reacted with this emoji"}), 400
-    
-    # Add new reaction
-    new_reaction = Reaction(
-        emoji=data["emoji"],
-        user_id=user_id,
-        message_id=message_id
-    )
-    db.session.add(new_reaction)
-    db.session.commit()
-    
-    return jsonify({"message": "Reaction added"}), 201
+    try:
+        User, Channel, Message, Reaction = get_models()
+        db = get_db()
+        user_id = int(get_jwt_identity())
+        data = request.get_json()
+        print(f"Received data: {data}")
+        print(f"Data type: {type(data)}")
+        
+        # Validate request data
+        if not data or "emoji" not in data:
+            print(f"Missing emoji in request. Data: {data}")
+            return jsonify({"error": "Missing emoji in request"}), 400
+        
+        emoji = data["emoji"]
+        print(f"Emoji received: '{emoji}', type: {type(emoji)}, length: {len(emoji) if emoji else 'None'}")
+        if not emoji or len(emoji) == 0:
+            print(f"Emoji is empty: '{emoji}'")
+            return jsonify({"error": "Emoji cannot be empty"}), 400
+        
+        # Check if message exists
+        message = Message.query.get(message_id)
+        if not message:
+            return jsonify({"error": "Message not found"}), 404
+        
+        # Check if user already reacted with this emoji
+        existing_reaction = Reaction.query.filter_by(
+            user_id=user_id, 
+            message_id=message_id, 
+            emoji=emoji
+        ).first()
+        
+        if existing_reaction:
+            return jsonify({"error": "Already reacted with this emoji"}), 400
+        
+        # Add new reaction
+        new_reaction = Reaction(
+            emoji=emoji,
+            user_id=user_id,
+            message_id=message_id
+        )
+        db.session.add(new_reaction)
+        db.session.commit()
+        
+        return jsonify({"message": "Reaction added"}), 201
+        
+    except Exception as e:
+        print(f"Error adding reaction: {e}")
+        return jsonify({"error": str(e)}), 500
 
 # Remove reaction from message
 @chat_bp.route("/messages/<int:message_id>/reactions", methods=["DELETE"])
 @jwt_required()
 def remove_reaction(message_id):
-    User, Channel, Message, Reaction = get_models()
-    db = get_db()
-    user_id = int(get_jwt_identity())
-    data = request.get_json()
-    
-    # Find and remove the reaction
-    reaction = Reaction.query.filter_by(
-        user_id=user_id,
-        message_id=message_id,
-        emoji=data["emoji"]
-    ).first()
-    
-    if not reaction:
-        return jsonify({"error": "Reaction not found"}), 404
-    
-    db.session.delete(reaction)
-    db.session.commit()
-    
-    return jsonify({"message": "Reaction removed"}), 200
+    try:
+        User, Channel, Message, Reaction = get_models()
+        db = get_db()
+        user_id = int(get_jwt_identity())
+        data = request.get_json()
+        
+        # Validate request data
+        if not data or "emoji" not in data:
+            return jsonify({"error": "Missing emoji in request"}), 400
+        
+        emoji = data["emoji"]
+        if not emoji or len(emoji) == 0:
+            return jsonify({"error": "Emoji cannot be empty"}), 400
+        
+        # Find and remove the reaction
+        reaction = Reaction.query.filter_by(
+            user_id=user_id,
+            message_id=message_id,
+            emoji=emoji
+        ).first()
+        
+        if not reaction:
+            return jsonify({"error": "Reaction not found"}), 404
+        
+        db.session.delete(reaction)
+        db.session.commit()
+        
+        return jsonify({"message": "Reaction removed"}), 200
+        
+    except Exception as e:
+        print(f"Error removing reaction: {e}")
+        return jsonify({"error": str(e)}), 500
