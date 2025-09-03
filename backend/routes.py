@@ -76,6 +76,35 @@ def get_channels():
     channels = Channel.query.all()
     return jsonify([{"id": c.id, "name": c.name} for c in channels])
 
+# Delete channel
+@chat_bp.route("/channels/<int:channel_id>", methods=["DELETE"])
+@jwt_required()
+def delete_channel(channel_id):
+    try:
+        User, Channel, Message, Reaction = get_models()
+        db = get_db()
+        user_id = int(get_jwt_identity())
+        
+        # Check if channel exists
+        channel = Channel.query.get(channel_id)
+        if not channel:
+            return jsonify({"error": "Channel not found"}), 404
+        
+        # For now, allow any authenticated user to delete any channel
+        # In a production app, you might want to add ownership checks
+        
+        # Delete all messages in the channel first (cascade delete)
+        Message.query.filter_by(channel_id=channel_id).delete()
+        
+        # Delete the channel
+        db.session.delete(channel)
+        db.session.commit()
+        
+        return jsonify({"message": "Channel deleted successfully"}), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # Add error handler for JWT errors
 @chat_bp.errorhandler(422)
 def handle_jwt_error(e):
