@@ -86,7 +86,7 @@ if __name__ == "__main__":
         port = int(os.environ.get("PORT", 8000))
         debug = os.environ.get("FLASK_ENV") == "development"
         print(f"Starting server on port {port}, debug={debug}")
-        socketio.run(app, debug=True, port=port, allow_unsafe_werkzeug=True)
+        socketio.run(app, debug=True, port=port, host='0.0.0.0', allow_unsafe_werkzeug=True)
     except Exception as e:
         print(f"Error starting app: {e}")
         import traceback
