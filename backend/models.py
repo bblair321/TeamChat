@@ -20,6 +20,13 @@ def init_models(db_instance):
         id = db_instance.Column(db_instance.Integer, primary_key=True)
         username = db_instance.Column(db_instance.String(80), unique=True, nullable=False)
         password = db_instance.Column(db_instance.String(120), nullable=False)
+        # Profile fields
+        display_name = db_instance.Column(db_instance.String(100), nullable=True)
+        avatar_url = db_instance.Column(db_instance.String(500), nullable=True)
+        status_message = db_instance.Column(db_instance.String(200), nullable=True)
+        is_online = db_instance.Column(db_instance.Boolean, default=False)
+        last_seen = db_instance.Column(db_instance.DateTime, default=datetime.utcnow)
+        created_at = db_instance.Column(db_instance.DateTime, default=datetime.utcnow)
         messages = db_instance.relationship("MessageModel", backref="user", lazy=True)
 
     class ChannelModel(db_instance.Model):

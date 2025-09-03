@@ -105,6 +105,116 @@ def delete_channel(channel_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# Get user profile
+@auth_bp.route("/profile", methods=["GET"])
+@jwt_required()
+def get_profile():
+    try:
+        User, Channel, Message, Reaction = get_models()
+        user_id = int(get_jwt_identity())
+        user = User.query.get(user_id)
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        return jsonify({
+            "id": user.id,
+            "username": user.username,
+            "display_name": user.display_name or user.username,
+            "avatar_url": user.avatar_url,
+            "status_message": user.status_message,
+            "is_online": user.is_online,
+            "last_seen": user.last_seen.isoformat() if user.last_seen else None,
+            "created_at": user.created_at.isoformat() if user.created_at else None
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Update user profile
+@auth_bp.route("/profile", methods=["PUT"])
+@jwt_required()
+def update_profile():
+    try:
+        User, Channel, Message, Reaction = get_models()
+        db = get_db()
+        user_id = int(get_jwt_identity())
+        user = User.query.get(user_id)
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        # Update allowed fields
+        if "display_name" in data:
+            user.display_name = data["display_name"]
+        if "status_message" in data:
+            user.status_message = data["status_message"]
+        if "avatar_url" in data:
+            user.avatar_url = data["avatar_url"]
+        
+        db.session.commit()
+        
+        return jsonify({
+            "id": user.id,
+            "username": user.username,
+            "display_name": user.display_name or user.username,
+            "avatar_url": user.avatar_url,
+            "status_message": user.status_message,
+            "is_online": user.is_online,
+            "last_seen": user.last_seen.isoformat() if user.last_seen else None,
+            "created_at": user.created_at.isoformat() if user.created_at else None
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Get all users (for mentions)
+@auth_bp.route("/users", methods=["GET"])
+@jwt_required()
+def get_users():
+    try:
+        User, Channel, Message, Reaction = get_models()
+        users = User.query.all()
+        
+        return jsonify([{
+            "id": user.id,
+            "username": user.username,
+            "display_name": user.display_name or user.username,
+            "avatar_url": user.avatar_url,
+            "is_online": user.is_online,
+            "last_seen": user.last_seen.isoformat() if user.last_seen else None
+        } for user in users])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Update online status
+@auth_bp.route("/online", methods=["POST"])
+@jwt_required()
+def update_online_status():
+    try:
+        User, Channel, Message, Reaction = get_models()
+        db = get_db()
+        user_id = int(get_jwt_identity())
+        user = User.query.get(user_id)
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        data = request.get_json()
+        if data and "is_online" in data:
+            user.is_online = data["is_online"]
+            if not data["is_online"]:
+                from datetime import datetime
+                user.last_seen = datetime.utcnow()
+        
+        db.session.commit()
+        
+        return jsonify({"message": "Status updated"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # Add error handler for JWT errors
 @chat_bp.errorhandler(422)
 def handle_jwt_error(e):
