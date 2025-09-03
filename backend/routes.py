@@ -17,8 +17,16 @@ def get_db():
 def register():
     User, Channel, Message, Reaction = get_models()
     db = get_db()
+    
     data = request.get_json()
-    if User.query.filter_by(username=data["username"]).first():
+    if not data or not isinstance(data, dict):
+        return jsonify({"error": "Invalid JSON data"}), 400
+    
+    if "username" not in data or "password" not in data:
+        return jsonify({"error": "Missing username or password"}), 400
+    
+    existing_user = User.query.filter_by(username=data["username"]).first()
+    if existing_user:
         return jsonify({"error": "User already exists"}), 400
 
     hashed_pw = generate_password_hash(data["password"])
@@ -30,7 +38,14 @@ def register():
 @auth_bp.route("/login", methods=["POST"])
 def login():
     User, Channel, Message, Reaction = get_models()
+    
     data = request.get_json()
+    if not data or not isinstance(data, dict):
+        return jsonify({"error": "Invalid JSON data"}), 400
+    
+    if "username" not in data or "password" not in data:
+        return jsonify({"error": "Missing username or password"}), 400
+    
     user = User.query.filter_by(username=data["username"]).first()
     if not user or not check_password_hash(user.password, data["password"]):
         return jsonify({"error": "Invalid credentials"}), 401
@@ -61,6 +76,11 @@ def get_channels():
     channels = Channel.query.all()
     return jsonify([{"id": c.id, "name": c.name} for c in channels])
 
+# Add error handler for JWT errors
+@chat_bp.errorhandler(422)
+def handle_jwt_error(e):
+    return jsonify({"error": "JWT validation failed"}), 422
+
 # Post message
 @chat_bp.route("/messages", methods=["POST"])
 @jwt_required()
@@ -75,7 +95,7 @@ def post_message():
     return jsonify({"message": "Message sent!"}), 201
 
 # Get messages for a channel
-@chat_bp.route("/messages/<int:channel_id>", methods=["GET"])
+@chat_bp.route("/channels/<int:channel_id>/messages", methods=["GET"])
 @jwt_required()
 def get_messages(channel_id):
     User, Channel, Message, Reaction = get_models()
@@ -110,18 +130,13 @@ def add_reaction(message_id):
         db = get_db()
         user_id = int(get_jwt_identity())
         data = request.get_json()
-        print(f"Received data: {data}")
-        print(f"Data type: {type(data)}")
         
         # Validate request data
         if not data or "emoji" not in data:
-            print(f"Missing emoji in request. Data: {data}")
             return jsonify({"error": "Missing emoji in request"}), 400
         
         emoji = data["emoji"]
-        print(f"Emoji received: '{emoji}', type: {type(emoji)}, length: {len(emoji) if emoji else 'None'}")
         if not emoji or len(emoji) == 0:
-            print(f"Emoji is empty: '{emoji}'")
             return jsonify({"error": "Emoji cannot be empty"}), 400
         
         # Check if message exists
@@ -151,7 +166,6 @@ def add_reaction(message_id):
         return jsonify({"message": "Reaction added"}), 201
         
     except Exception as e:
-        print(f"Error adding reaction: {e}")
         return jsonify({"error": str(e)}), 500
 
 # Remove reaction from message

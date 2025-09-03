@@ -4,14 +4,15 @@ from datetime import datetime
 User = None
 Channel = None
 Message = None
+Reaction = None
 
 def init_models(db_instance):
     """Initialize models with the db instance"""
-    global User, Channel, Message
+    global User, Channel, Message, Reaction
     
     # Only initialize if not already done
     if User is not None:
-        return User, Channel, Message
+        return User, Channel, Message, Reaction
     
     class UserModel(db_instance.Model):
         __tablename__ = 'user'

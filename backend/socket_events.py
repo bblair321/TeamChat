@@ -71,7 +71,8 @@ def handle_join_channel(data):
             return
         
         # Get user info from database
-        User, Channel, Message = init_models(_db)
+        from flask import current_app
+        User = current_app.User
         user = User.query.get(user_id)
         if not user:
             emit('error', {'msg': 'User not found'})
@@ -132,8 +133,6 @@ def handle_leave_channel(data):
 def handle_send_message(data):
     """Handle sending a message to a channel"""
     try:
-        print(f"Received send_message event: {data}")
-        
         # Get token from the data
         token = data.get('token')
         if not token:
@@ -143,7 +142,6 @@ def handle_send_message(data):
         # Decode token to get user info
         decoded = decode_token(token)
         user_id = decoded['sub']
-        print(f"User ID from token: {user_id}")
         
         # Get message data
         channel_id = data.get('channel_id')
@@ -153,10 +151,11 @@ def handle_send_message(data):
             emit('error', {'msg': 'Missing channel ID or content'})
             return
         
-        print(f"Processing message: '{content}' for channel {channel_id}")
-        
-        # Initialize models
-        User, Channel, Message = init_models(_db)
+        # Get models from the app context
+        from flask import current_app
+        User = current_app.User
+        Channel = current_app.Channel
+        Message = current_app.Message
         
         # Get user info
         user = User.query.get(user_id)
@@ -164,18 +163,14 @@ def handle_send_message(data):
             emit('error', {'msg': 'User not found'})
             return
         
-        print(f"User found: {user.username}")
-        
         # Create and save message
         new_message = Message(
             content=content,
             user_id=user_id,
             channel_id=channel_id
         )
-        _db.session.add(new_message)
-        _db.session.commit()
-        
-        print(f"Message saved to database with ID: {new_message.id}")
+        current_app.db.session.add(new_message)
+        current_app.db.session.commit()
         
         # Emit message to all users in the channel
         room = f'channel_{channel_id}'
@@ -187,9 +182,7 @@ def handle_send_message(data):
             'channel_id': channel_id
         }
         
-        print(f"Emitting 'new_message' to room '{room}': {message_data}")
         emit('new_message', message_data, room=room)
-        print(f'Message sent to channel {channel_id}: {content}')
         
     except Exception as e:
         print(f'Error sending message: {e}')
