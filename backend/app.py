@@ -24,7 +24,7 @@ def create_app():
     # Initialize extensions
     db.init_app(app)
     JWTManager(app)
-    socketio.init_app(app, cors_allowed_origins="*", async_mode='threading')
+    socketio.init_app(app, cors_allowed_origins="*", async_mode='threading', logger=True, engineio_logger=True)
 
     # Add a simple test route
     @app.route('/')

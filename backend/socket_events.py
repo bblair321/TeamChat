@@ -6,6 +6,9 @@ from models import init_models
 _socketio = None
 _db = None
 
+# Track online users per channel
+_online_users = {}  # {channel_id: {user_id: username}}
+
 def init_socket_events(socketio_instance, db_instance):
     """Initialize socket events with the socketio and db instances"""
     global _socketio, _db
@@ -20,6 +23,21 @@ def init_socket_events(socketio_instance, db_instance):
     _socketio.on_event('send_message', handle_send_message)
     _socketio.on_event('typing', handle_typing)
 
+def emit_online_status(channel_id):
+    """Emit online status for a channel to all users in that channel"""
+    if channel_id in _online_users:
+        online_count = len(_online_users[channel_id])
+        online_users = list(_online_users[channel_id].values())
+        
+        room = f'channel_{channel_id}'
+        emit('online_status', {
+            'channel_id': channel_id,
+            'online_count': online_count,
+            'online_users': online_users
+        }, room=room)
+        
+        print(f"Emitted online status for channel {channel_id}: {online_count} users online")
+
 def handle_connect():
     """Handle client connection"""
     print('Client connected')
@@ -28,6 +46,10 @@ def handle_connect():
 def handle_disconnect():
     """Handle client disconnection"""
     print('Client disconnected')
+    
+    # Note: We can't easily track which user disconnected without storing socket_id to user_id mapping
+    # For now, we'll rely on the leave_channel events to clean up online users
+    # In a production app, you'd want to store socket_id -> user_id mapping
 
 def handle_join_channel(data):
     """Handle user joining a channel"""
@@ -48,12 +70,27 @@ def handle_join_channel(data):
             emit('error', {'msg': 'No channel ID provided'})
             return
         
+        # Get user info from database
+        User, Channel, Message = init_models(_db)
+        user = User.query.get(user_id)
+        if not user:
+            emit('error', {'msg': 'User not found'})
+            return
+        
         # Join the room for this channel
         room = f'channel_{channel_id}'
         join_room(room)
         
-        print(f'User {user_id} joined channel {channel_id}')
+        # Track online user
+        if channel_id not in _online_users:
+            _online_users[channel_id] = {}
+        _online_users[channel_id][user_id] = user.username
+        
+        print(f'User {user.username} (ID: {user_id}) joined channel {channel_id}')
         emit('status', {'msg': f'Joined channel {channel_id}'}, room=room)
+        
+        # Emit updated online status
+        emit_online_status(channel_id)
         
     except Exception as e:
         print(f'Error joining channel: {e}')
@@ -62,10 +99,30 @@ def handle_join_channel(data):
 def handle_leave_channel(data):
     """Handle user leaving a channel"""
     try:
+        # Get token from the data
+        token = data.get('token')
         channel_id = data.get('channel_id')
+        
         if channel_id:
             room = f'channel_{channel_id}'
             leave_room(room)
+            
+            # Remove user from online tracking if token provided
+            if token:
+                try:
+                    decoded = decode_token(token)
+                    user_id = decoded['sub']
+                    
+                    if channel_id in _online_users and user_id in _online_users[channel_id]:
+                        username = _online_users[channel_id][user_id]
+                        del _online_users[channel_id][user_id]
+                        print(f'User {username} (ID: {user_id}) left channel {channel_id}')
+                        
+                        # Emit updated online status
+                        emit_online_status(channel_id)
+                except:
+                    pass  # If token is invalid, just continue
+            
             print(f'User left channel {channel_id}')
             emit('status', {'msg': f'Left channel {channel_id}'})
     except Exception as e:
