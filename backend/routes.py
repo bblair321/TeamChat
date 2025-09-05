@@ -20,20 +20,38 @@ def register():
     
     data = request.get_json()
     if not data or not isinstance(data, dict):
-        return jsonify({"error": "Invalid JSON data"}), 400
+        return jsonify({"error": "Invalid data format. Please try again."}), 400
     
     if "username" not in data or "password" not in data:
-        return jsonify({"error": "Missing username or password"}), 400
+        return jsonify({"error": "Please provide both username and password."}), 400
     
-    existing_user = User.query.filter_by(username=data["username"]).first()
+    # Validate username
+    username = data["username"].strip()
+    if len(username) < 3:
+        return jsonify({"error": "Username must be at least 3 characters long."}), 400
+    if len(username) > 20:
+        return jsonify({"error": "Username must be 20 characters or less."}), 400
+    if not username.replace("_", "").isalnum():
+        return jsonify({"error": "Username can only contain letters, numbers, and underscores."}), 400
+    
+    # Validate password
+    password = data["password"]
+    if len(password) < 8:
+        return jsonify({"error": "Password must be at least 8 characters of any combination."}), 400
+    
+    existing_user = User.query.filter_by(username=username).first()
     if existing_user:
-        return jsonify({"error": "User already exists"}), 400
+        return jsonify({"error": "This username is already taken. Please choose a different one."}), 400
 
-    hashed_pw = generate_password_hash(data["password"])
-    new_user = User(username=data["username"], password=hashed_pw)
-    db.session.add(new_user)
-    db.session.commit()
-    return jsonify({"message": "User created successfully"}), 201
+    try:
+        hashed_pw = generate_password_hash(password)
+        new_user = User(username=username, password=hashed_pw)
+        db.session.add(new_user)
+        db.session.commit()
+        return jsonify({"message": "Account created successfully! You can now log in."}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": "Failed to create account. Please try again."}), 500
 
 @auth_bp.route("/login", methods=["POST"])
 def login():
@@ -41,17 +59,34 @@ def login():
     
     data = request.get_json()
     if not data or not isinstance(data, dict):
-        return jsonify({"error": "Invalid JSON data"}), 400
+        return jsonify({"error": "Invalid data format. Please try again."}), 400
     
     if "username" not in data or "password" not in data:
-        return jsonify({"error": "Missing username or password"}), 400
+        return jsonify({"error": "Please provide both username and password."}), 400
     
-    user = User.query.filter_by(username=data["username"]).first()
-    if not user or not check_password_hash(user.password, data["password"]):
-        return jsonify({"error": "Invalid credentials"}), 401
+    username = data["username"].strip()
+    password = data["password"]
+    
+    if not username:
+        return jsonify({"error": "Please enter your username."}), 400
+    if not password:
+        return jsonify({"error": "Please enter your password."}), 400
+    
+    user = User.query.filter_by(username=username).first()
+    if not user:
+        return jsonify({"error": "Invalid username or password. Please check your credentials and try again."}), 401
+    
+    if not check_password_hash(user.password, password):
+        return jsonify({"error": "Invalid username or password. Please check your credentials and try again."}), 401
 
-    token = create_access_token(identity=str(user.id))
-    return jsonify({"token": token})
+    try:
+        token = create_access_token(identity=str(user.id))
+        return jsonify({
+            "token": token,
+            "message": "Login successful! Welcome back."
+        })
+    except Exception as e:
+        return jsonify({"error": "Failed to create login session. Please try again."}), 500
 
 # Create channel
 @chat_bp.route("/channels", methods=["POST"])
@@ -59,14 +94,47 @@ def login():
 def create_channel():
     User, Channel, Message, Reaction = get_models()
     db = get_db()
+    
     data = request.get_json()
-    if Channel.query.filter_by(name=data["name"]).first():
-        return jsonify({"error": "Channel already exists"}), 400
+    if not data or not isinstance(data, dict):
+        return jsonify({"error": "Invalid data format. Please try again."}), 400
+    
+    if "name" not in data:
+        return jsonify({"error": "Please provide a channel name."}), 400
+    
+    channel_name = data["name"].strip()
+    
+    if not channel_name:
+        return jsonify({"error": "Channel name cannot be empty."}), 400
+    
+    if len(channel_name) < 3:
+        return jsonify({"error": "Channel name must be at least 3 characters long."}), 400
+    
+    if len(channel_name) > 50:
+        return jsonify({"error": "Channel name must be 50 characters or less."}), 400
+    
+    # Check for invalid characters
+    if not channel_name.replace(" ", "").replace("-", "").replace("_", "").isalnum():
+        return jsonify({"error": "Channel name can only contain letters, numbers, spaces, hyphens, and underscores."}), 400
+    
+    existing_channel = Channel.query.filter_by(name=channel_name).first()
+    if existing_channel:
+        return jsonify({"error": "A channel with this name already exists. Please choose a different name."}), 400
 
-    new_channel = Channel(name=data["name"])
-    db.session.add(new_channel)
-    db.session.commit()
-    return jsonify({"message": "Channel created"}), 201
+    try:
+        new_channel = Channel(name=channel_name)
+        db.session.add(new_channel)
+        db.session.commit()
+        return jsonify({
+            "message": f"Channel '{channel_name}' created successfully!",
+            "channel": {
+                "id": new_channel.id,
+                "name": new_channel.name
+            }
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": "Failed to create channel. Please try again."}), 500
 
 # Get channels
 @chat_bp.route("/channels", methods=["GET"])
@@ -231,11 +299,39 @@ def post_message():
     User, Channel, Message, Reaction = get_models()
     db = get_db()
     user_id = int(get_jwt_identity())
+    
     data = request.get_json()
-    new_msg = Message(content=data["content"], user_id=user_id, channel_id=data["channel_id"])
-    db.session.add(new_msg)
-    db.session.commit()
-    return jsonify({"message": "Message sent!"}), 201
+    if not data or not isinstance(data, dict):
+        return jsonify({"error": "Invalid data format. Please try again."}), 400
+    
+    if "content" not in data or "channel_id" not in data:
+        return jsonify({"error": "Please provide both message content and channel ID."}), 400
+    
+    content = data["content"].strip()
+    channel_id = data["channel_id"]
+    
+    if not content:
+        return jsonify({"error": "Message cannot be empty."}), 400
+    
+    if len(content) > 1000:
+        return jsonify({"error": "Message is too long. Please keep it under 1000 characters."}), 400
+    
+    # Check if channel exists
+    channel = Channel.query.get(channel_id)
+    if not channel:
+        return jsonify({"error": "Channel not found. It may have been deleted."}), 404
+    
+    try:
+        new_msg = Message(content=content, user_id=user_id, channel_id=channel_id)
+        db.session.add(new_msg)
+        db.session.commit()
+        return jsonify({
+            "message": "Message sent successfully!",
+            "message_id": new_msg.id
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": "Failed to send message. Please try again."}), 500
 
 # Get messages for a channel
 @chat_bp.route("/channels/<int:channel_id>/messages", methods=["GET"])
@@ -285,16 +381,19 @@ def add_reaction(message_id):
         
         # Validate request data
         if not data or "emoji" not in data:
-            return jsonify({"error": "Missing emoji in request"}), 400
+            return jsonify({"error": "Please select an emoji to react with."}), 400
         
-        emoji = data["emoji"]
+        emoji = data["emoji"].strip()
         if not emoji or len(emoji) == 0:
-            return jsonify({"error": "Emoji cannot be empty"}), 400
+            return jsonify({"error": "Please select a valid emoji."}), 400
+        
+        if len(emoji) > 10:
+            return jsonify({"error": "Invalid emoji selected."}), 400
         
         # Check if message exists
         message = Message.query.get(message_id)
         if not message:
-            return jsonify({"error": "Message not found"}), 404
+            return jsonify({"error": "Message not found. It may have been deleted."}), 404
         
         # Check if user already reacted with this emoji
         existing_reaction = Reaction.query.filter_by(
@@ -304,7 +403,7 @@ def add_reaction(message_id):
         ).first()
         
         if existing_reaction:
-            return jsonify({"error": "Already reacted with this emoji"}), 400
+            return jsonify({"error": "You've already reacted with this emoji. Click it again to remove your reaction."}), 400
         
         # Add new reaction
         new_reaction = Reaction(
@@ -315,7 +414,7 @@ def add_reaction(message_id):
         db.session.add(new_reaction)
         db.session.commit()
         
-        return jsonify({"message": "Reaction added"}), 201
+        return jsonify({"message": f"Reaction {emoji} added successfully!"}), 201
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
