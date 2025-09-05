@@ -93,8 +93,12 @@ def delete_channel(channel_id):
         # For now, allow any authenticated user to delete any channel
         # In a production app, you might want to add ownership checks
         
-        # Delete all messages in the channel first (cascade delete)
-        Message.query.filter_by(channel_id=channel_id).delete()
+        # Get all messages in the channel first
+        messages_in_channel = Message.query.filter_by(channel_id=channel_id).all()
+        
+        # Delete all messages in the channel (cascade will handle reactions)
+        for message in messages_in_channel:
+            db.session.delete(message)
         
         # Delete the channel
         db.session.delete(channel)
@@ -238,6 +242,9 @@ def post_message():
 @jwt_required()
 def get_messages(channel_id):
     User, Channel, Message, Reaction = get_models()
+    current_user_id = int(get_jwt_identity())
+    current_user = User.query.get(current_user_id)
+    
     messages = Message.query.filter_by(channel_id=channel_id).order_by(Message.timestamp).all()
     
     # Format messages with reactions
@@ -246,9 +253,15 @@ def get_messages(channel_id):
         # Group reactions by emoji
         reactions = {}
         for reaction in m.reactions:
+            # Skip reactions with empty emojis
+            if not reaction.emoji or reaction.emoji.strip() == "":
+                continue
+                
             if reaction.emoji not in reactions:
                 reactions[reaction.emoji] = []
-            reactions[reaction.emoji].append(reaction.user.username)
+            # Replace current user's username with "You" for frontend display
+            username = "You" if reaction.user_id == current_user_id else reaction.user.username
+            reactions[reaction.emoji].append(username)
         
         formatted_messages.append({
             "id": m.id,
