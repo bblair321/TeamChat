@@ -1,0 +1,54 @@
+{
+  "name": "teamchat-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@testing-library/jest-dom": "^5.16.4",
+    "@testing-library/react": "^13.3.0",
+    "@testing-library/user-event": "^13.5.0",
+    "axios": "^1.4.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.3.0",
+    "react-scripts": "5.0.1",
+    "socket.io-client": "^4.7.2"
+  },
+  "scripts": {
+    "start": "vite",
+    "start:react-scripts": "react-scripts start",
+    "build": "vite build",
+    "build:react-scripts": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "preview": "vite preview",
+    "analyze": "npm run build && npx webpack-bundle-analyzer build/static/js/*.js",
+    "build:analyze": "GENERATE_SOURCEMAP=true npm run build && npx webpack-bundle-analyzer build/static/js/*.js",
+    "lighthouse": "lighthouse http://localhost:3000 --output=html --output-path=./lighthouse-report.html",
+    "build:prod": "NODE_ENV=production npm run build",
+    "dev:perf": "REACT_APP_PERFORMANCE_MONITORING=true npm start"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.2",
+    "lighthouse": "^10.4.0",
+    "vite": "^7.1.4",
+    "webpack-bundle-analyzer": "^4.9.0"
+  }
+}
